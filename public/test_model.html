@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+    <h1>Emotion Model Test</h1>
+    <pre id="output" style="background: #f0f0f0; padding: 20px; font-family: monospace; white-space: pre-wrap;"></pre>
+    
+    <script>
+        const output = document.getElementById('output');
+        let log = '';
+        
+        function addLog(msg) {
+            log += msg + '\n';
+            output.innerHTML = log;
+            console.log(msg);
+        }
+        
+        async function testModel() {
+            try {
+                addLog('===== EMOTION MODEL TEST =====\n');
+                addLog('Loading model from /web_model/model.json...');
+                
+                const model = await tf.loadGraphModel('web_model/model.json');
+                
+                addLog('✅ Model loaded successfully!');
+                addLog(`Model inputs: ${JSON.stringify(model.inputs.map(i => i.shape))}`);
+                addLog(`Model outputs: ${JSON.stringify(model.outputs.map(o => o.shape))}`);
+                
+                // Test 1: Zero input
+                addLog('\n--- Test 1: Zero Input ---');
+                const zeroTensor = tf.zeros([1, 16, 224, 224, 3]);
+                const zeroOut = model.execute(zeroTensor);
+                const zeroData = await zeroOut.data();
+                const zeroProbs = Array.from(zeroData);
+                addLog(`Zero input output: ${zeroProbs.map(p => p.toFixed(4)).join(', ')}`);
+                zeroTensor.dispose();
+                if (Array.isArray(zeroOut)) zeroOut.forEach(t => t.dispose());
+                else zeroOut.dispose();
+                
+                // Test 2: Random input
+                addLog('\n--- Test 2: Random Input ---');
+                const randTensor = tf.randomUniform([1, 16, 224, 224, 3]);
+                const randOut = model.execute(randTensor);
+                const randData = await randOut.data();
+                const randProbs = Array.from(randData);
+                addLog(`Random input output: ${randProbs.map(p => p.toFixed(4)).join(', ')}`);
+                randTensor.dispose();
+                if (Array.isArray(randOut)) randOut.forEach(t => t.dispose());
+                else randOut.dispose();
+                
+                // Compare outputs
+                addLog('\n--- Analysis ---');
+                const mean = randProbs.reduce((a,b) => a+b, 0) / randProbs.length;
+                const variance = randProbs.reduce((a,b) => a + Math.pow(b-mean,2), 0) / randProbs.length;
+                const stdDev = Math.sqrt(variance);
+                const sum = randProbs.reduce((a,b) => a+b, 0);
+                
+                addLog(`Mean: ${mean.toFixed(6)}`);
+                addLog(`StdDev: ${stdDev.toFixed(6)}`);
+                addLog(`Sum: ${sum.toFixed(4)} (should be ~1.0)`);
+                
+                if (stdDev > 0.05) {
+                    addLog('\n✅ SUCCESS: Model is outputting different probabilities for different inputs!');
+                } else {
+                    addLog('\n❌ PROBLEM: Model output variance is very low');
+                    addLog('This suggests weights are not being applied correctly.');
+                }
+                
+            } catch (e) {
+                addLog(`\n❌ ERROR: ${e.message}`);
+                addLog(e.stack);
+            }
+        }
+        
+        // Start test immediately
+        testModel();
+    </script>
+</body>
+</html>

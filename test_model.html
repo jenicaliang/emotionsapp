@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Model Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+</head>
+<body>
+    <h1>Emotion Model Test</h1>
+    <pre id="output"></pre>
+    
+    <script>
+        const output = document.getElementById('output');
+        
+        async function testModel() {
+            try {
+                output.innerHTML += 'Loading model...\n';
+                
+                // Create a simple test tensor
+                const testInput = tf.randomUniform([1, 16, 224, 224, 3]);
+                output.innerHTML += `Input shape: ${testInput.shape}\n`;
+                
+                // Load and test model
+                output.innerHTML += 'Loading from /web_model/model.json...\n';
+                const model = await tf.loadGraphModel('/web_model/model.json');
+                
+                output.innerHTML += `Model inputs: ${JSON.stringify(model.inputs.map(i => i.shape))}\n`;
+                output.innerHTML += `Model outputs: ${JSON.stringify(model.outputs.map(o => o.shape))}\n`;
+                
+                // Run inference
+                output.innerHTML += '\nRunning inference with test input...\n';
+                const result = model.execute(testInput);
+                const resultData = await result.data();
+                const probs = Array.from(resultData);
+                
+                output.innerHTML += `Raw output: ${probs.map(p => p.toFixed(4)).join(', ')}\n`;
+                output.innerHTML += `Sum: ${probs.reduce((a,b) => a+b, 0).toFixed(4)}\n`;
+                
+                // Check variance
+                const mean = probs.reduce((a,b) => a+b, 0) / probs.length;
+                const variance = probs.reduce((a,b) => a + Math.pow(b-mean,2), 0) / probs.length;
+                const stdDev = Math.sqrt(variance);
+                output.innerHTML += `Mean: ${mean.toFixed(6)}, StdDev: ${stdDev.toFixed(6)}\n`;
+                
+                if (stdDev > 0.05) {
+                    output.innerHTML += '✅ Model is discriminating between emotions!\n';
+                } else {
+                    output.innerHTML += '❌ Model output variance too low - weights may not be loaded\n';
+                }
+                
+                // Cleanup
+                testInput.dispose();
+                if (Array.isArray(result)) result.forEach(r => r.dispose());
+                else result.dispose();
+                
+            } catch (e) {
+                output.innerHTML += `ERROR: ${e.message}\n${e.stack}\n`;
+            }
+        }
+        
+        testModel();
+    </script>
+</body>
+</html>
