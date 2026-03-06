@@ -25,7 +25,7 @@ const arr = Array.from(await logits.data());  // length 8
 const probs = tf.softmax(tf.tensor1d(arr));
 const p = Array.from(await probs.data());
 
-const labels = ["Neutral", "Happy", "Sad", "Surprise", "Fear", "Disgust", "Angry", "Contempt"]; // matches model training order (DFEW dataset)
+const labels = ["Unknown", "Happy", "Sad", "Neutral", "Angry", "Surprise", "Disgust", "Fear"]; // matches teammate inference order
 const top = p
   .map((v, i) => ({ label: labels[i] ?? `class_${i}`, p: v }))
   .sort((a, b) => b.p - a.p)

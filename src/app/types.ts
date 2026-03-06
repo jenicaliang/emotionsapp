@@ -1,11 +1,12 @@
 export type Emotion = 
-  | "Neutral" 
+  | "Unknown"
   | "Happy" 
   | "Sad" 
-  | "Surprise" 
-  | "Fear" 
-  | "Disgust" 
+  | "Neutral" 
   | "Angry" 
+  | "Surprise" 
+  | "Disgust" 
+  | "Fear" 
   | "Contempt";
 
 export interface Friend {

@@ -4,14 +4,14 @@ import { cropFace224 } from "./cropFace224";
 import { sampleFrames } from "./utils";
 
 const labels = [
-  "Neutral",
+  "Unknown",
   "Happy",
   "Sad",
-  "Surprise",
-  "Fear",
-  "Disgust",
+  "Neutral",
   "Angry",
-  "Contempt",
+  "Surprise",
+  "Disgust",
+  "Fear",
 ] as const;
 
 export type EmotionLabel = (typeof labels)[number];
@@ -212,40 +212,61 @@ function preprocessFrames(
   });
 }
 
+function resizeFrameTo224(frame: ImageData): ImageData {
+  const src = document.createElement("canvas");
+  src.width = frame.width;
+  src.height = frame.height;
+  const sctx = src.getContext("2d", { willReadFrequently: true });
+  if (!sctx) return frame;
+  sctx.putImageData(frame, 0, 0);
+
+  const out = document.createElement("canvas");
+  out.width = 224;
+  out.height = 224;
+  const octx = out.getContext("2d", { willReadFrequently: true });
+  if (!octx) return frame;
+  // Preserve aspect ratio by center-cropping to square before resize.
+  const side = Math.min(frame.width, frame.height);
+  const sx = Math.floor((frame.width - side) / 2);
+  const sy = Math.floor((frame.height - side) / 2);
+  octx.drawImage(src, sx, sy, side, side, 0, 0, 224, 224);
+  return octx.getImageData(0, 0, 224, 224);
+}
+
 export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResult> {
   const m = await loadEmotionModel();
 
   console.log(`\n🎬 Processing ${frames.length} frames...`);
 
-  // 1) crop faces (keep last box + last successful crop)
-  const cropped: ImageData[] = [];
+  // 1) Build inference frames with moderate face cropping (fallback to resized full frame).
   let lastBox: FaceBox | null = null;
   let debugCrop: ImageData | null = null;
 
-  for (const f of frames) {
-    const res = await cropFace224(f);
-    if (res?.image) {
-      cropped.push(res.image);
-      debugCrop = res.image; // <-- keep the most recent successful crop
-      if (res.box) lastBox = res.box;
-    }
-  }
-
-  console.log(`👤 Face crops found: ${cropped.length} out of ${frames.length}`);
-  if (cropped.length === 0) {
-    console.warn("⚠️ WARNING: No faces detected - using original frames as fallback");
-  }
-
-  // fallback if no faces detected
-  const usedFrames = cropped.length ? cropped : frames;
-
-  const picked = sampleFrames(usedFrames, 16);
+  // 2) Match training script frame handling: first 16 frames + pad with last if short.
+  const picked = sampleFrames(frames, 16);
   if (picked.length !== 16) {
     throw new Error(`Expected 16 frames after sampling, got ${picked.length}`);
   }
+  const prepared: ImageData[] = [];
+  for (const frame of picked) {
+    const res = await cropFace224(frame);
+    if (res?.image) {
+      prepared.push(res.image);
+      debugCrop = res.image;
+      lastBox = res.box ?? lastBox;
+    } else {
+      const resized = resizeFrameTo224(frame);
+      prepared.push(resized);
+      debugCrop = resized;
+    }
+  }
+
+  if (!lastBox) {
+    console.warn("⚠️ Face detection unavailable; using resized full frames.");
+  }
 
   // Log raw pixel stats for first picked frame before preprocessing.
-  const first = picked[0];
+  const first = prepared[0];
   if (first) {
     const data = first.data;
     let minVal = data[0] ?? 0;
@@ -257,13 +278,13 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
     console.log(`Frame 0 pixel range: [${minVal}, ${maxVal}]`);
   }
 
-  // 2) build input tensor [1,16,224,224,3] using selected preprocessing.
-  const input = preprocessFrames(picked, PREPROCESS_MODE);
+  // 3) build input tensor [1,16,224,224,3] using selected preprocessing.
+  const input = preprocessFrames(prepared, PREPROCESS_MODE);
 
   try {
     console.log("=== MODEL INFERENCE START ===");
     console.log("Input tensor shape:", input.shape);
-    console.log("Cropped frames used:", cropped.length);
+    console.log("Frames prepared for model:", prepared.length);
     
     // Check input range
     const inputData = await input.data();
@@ -325,7 +346,7 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
         "imagenet_bgr",
       ].filter((m) => m !== PREPROCESS_MODE) as PreprocessMode[];
       for (const mode of otherModes) {
-        const dbgInput = preprocessFrames(picked, mode);
+        const dbgInput = preprocessFrames(prepared, mode);
         const dbgOut = m.execute(dbgInput);
         const dbgTensor = (Array.isArray(dbgOut) ? dbgOut[0] : dbgOut) as tf.Tensor;
         const dbgRaw = Array.from(await dbgTensor.data());
@@ -342,7 +363,13 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
       }
     }
     
-    const label = labels[bestIdx] ?? "Neutral";
+    if (finalProbs.length !== labels.length) {
+      console.warn(
+        `⚠️ Output class count mismatch: got ${finalProbs.length}, expected ${labels.length}`
+      );
+    }
+
+    const label = labels[bestIdx] ?? "Unknown";
     const expected = parseExpectedLabelFromUrl();
     if (expected) {
       updateAndLogConfusion(expected, label);

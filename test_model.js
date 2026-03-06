@@ -49,7 +49,7 @@ async function testEmotionModel() {
       console.log('\n✅ SUCCESS: Model outputs vary with input!');
       
       // Find which emotion is predicted
-      const emotions = ["Neutral", "Happy", "Sad", "Surprise", "Fear", "Disgust", "Angry", "Contempt"];
+      const emotions = ["Unknown", "Happy", "Sad", "Neutral", "Angry", "Surprise", "Disgust", "Fear"];
       const maxIdx = randArray.indexOf(Math.max(...randArray));
       console.log(`Top emotion: ${emotions[maxIdx]} (${(randArray[maxIdx] * 100).toFixed(1)}%)`);
     } else {

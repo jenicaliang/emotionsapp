@@ -66,24 +66,26 @@ export const carePackages: CarePackage[] = [
 ];
 
 export const emotionColors: Record<Emotion, string> = {
-  Neutral: "#D4C4B4", // Deeper warm beige
+  Unknown: "#D9D9D9", // Fallback gray when model is uncertain
   Happy: "#FFD580", // Warmer, deeper peach/gold
   Sad: "#8CB8FF", // Deeper sky blue
-  Surprise: "#FFBE80", // Deeper apricot orange
-  Fear: "#C89FFF", // Richer lavender purple
-  Disgust: "#8CFFC4", // Brighter mint green
+  Neutral: "#D4C4B4", // Deeper warm beige
   Angry: "#FFB8B8", // Stronger coral pink
+  Surprise: "#FFBE80", // Deeper apricot orange
+  Disgust: "#8CFFC4", // Brighter mint green
+  Fear: "#C89FFF", // Richer lavender purple
   Contempt: "#B8B8FF", // Soft violet
 };
 
 export const emotionFaces: Record<Emotion, string> = {
-  Neutral: "•_•",
+  Unknown: "•_•",
   Happy: "◡‿◡",
   Sad: "︵﹏︵",
-  Surprise: "◉_◉", // Custom SVG face used in EmotionalBlob component
-  Fear: "⊙﹏⊙",
-  Disgust: "ಠ~ಠ",
+  Neutral: "•_•",
   Angry: "ಠ_ಠ",
+  Surprise: "◉_◉", // Custom SVG face used in EmotionalBlob component
+  Disgust: "ಠ~ಠ",
+  Fear: "⊙﹏⊙",
   Contempt: "~_~",
 };
 

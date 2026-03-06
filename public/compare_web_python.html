@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web/Python Parity Checker</title>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 24px; line-height: 1.4; }
+    pre { background: #111; color: #0f0; padding: 12px; overflow: auto; }
+    .row { margin: 10px 0; }
+    button { padding: 8px 14px; }
+  </style>
+</head>
+<body>
+  <h1>Web/Python Parity Checker</h1>
+  <div class="row">Select extracted frames (e.g. <code>frame_001.jpg</code> ... <code>frame_016.jpg</code>):</div>
+  <input id="frames" type="file" multiple accept=".jpg,.jpeg,.png" />
+  <div class="row">
+    <button id="run">Run Web Model</button>
+  </div>
+  <pre id="out">Ready.</pre>
+
+  <script>
+    const CLASS_NAMES = [
+      "Unknown",
+      "Happy",
+      "Sad",
+      "Neutral",
+      "Angry",
+      "Surprise",
+      "Disgust",
+      "Fear",
+    ];
+
+    const out = document.getElementById("out");
+    const fileInput = document.getElementById("frames");
+    const runBtn = document.getElementById("run");
+
+    function log(msg) {
+      out.textContent += `\n${msg}`;
+    }
+
+    async function fileToImageData(file) {
+      const bmp = await createImageBitmap(file);
+      const c = document.createElement("canvas");
+      c.width = 224;
+      c.height = 224;
+      const ctx = c.getContext("2d");
+      ctx.drawImage(bmp, 0, 0, 224, 224);
+      return ctx.getImageData(0, 0, 224, 224);
+    }
+
+    runBtn.addEventListener("click", async () => {
+      try {
+        out.textContent = "Loading model...";
+        const model = await tf.loadGraphModel("/web_model/model.json");
+        log(`Model input: ${JSON.stringify(model.inputs[0]?.shape)}`);
+        log(`Model output: ${JSON.stringify(model.outputs[0]?.shape)}`);
+
+        const files = Array.from(fileInput.files || [])
+          .sort((a, b) => a.name.localeCompare(b.name))
+          .slice(0, 16);
+        if (!files.length) {
+          throw new Error("No frame files selected.");
+        }
+
+        while (files.length < 16) files.push(files[files.length - 1]);
+        log(`Using ${files.length} files (${files[0].name} ... ${files[files.length - 1].name})`);
+
+        const imgs = [];
+        for (const f of files) imgs.push(await fileToImageData(f));
+
+        const input = tf.tidy(() => {
+          const tensors = imgs.map(im => tf.browser.fromPixels(im).toFloat()); // raw RGB [0..255]
+          const clip = tf.stack(tensors).expandDims(0); // [1,16,224,224,3]
+          tensors.forEach(t => t.dispose());
+          return clip;
+        });
+
+        const y = model.execute(input);
+        const tensor = Array.isArray(y) ? y[0] : y;
+        const probs = Array.from(await tensor.data());
+
+        log("\nRaw probs (teammate class order):");
+        CLASS_NAMES.forEach((name, i) => {
+          log(`${name.padEnd(10)} ${Number(probs[i] || 0).toFixed(8)}`);
+        });
+
+        const ranked = CLASS_NAMES.map((name, i) => ({ name, p: probs[i] || 0 }))
+          .sort((a, b) => b.p - a.p);
+        log("\nRanked:");
+        ranked.forEach((x) => log(`${x.name.padEnd(10)} ${(x.p * 100).toFixed(2)}%`));
+        log(`\nPrediction: ${ranked[0]?.name || "Unknown"}`);
+
+        log("\nJSON:");
+        log(JSON.stringify({
+          classOrder: CLASS_NAMES,
+          probs,
+          prediction: ranked[0]?.name || "Unknown",
+          files: files.map(f => f.name),
+        }, null, 2));
+
+        if (Array.isArray(y)) y.forEach(t => t.dispose());
+        else y.dispose();
+        input.dispose();
+      } catch (err) {
+        out.textContent += `\nERROR: ${err.message || err}`;
+      }
+    });
+  </script>
+</body>
+</html>

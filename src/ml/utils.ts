@@ -3,15 +3,15 @@ export function sampleFrames<T>(frames: T[], target = 16): T[] {
 
   if (N === 0) return [];
 
-  // pad if too short
-  if (N <= target) {
-    const pad = Array(target - N).fill(frames[0]);
-    return [...pad, ...frames];
+  // Match training script:
+  // - take first `target` frames
+  // - if fewer than `target`, pad by repeating the last frame
+  const head = frames.slice(0, target);
+  if (head.length < target) {
+    const last = head[head.length - 1];
+    while (head.length < target) head.push(last);
   }
+  if (head.length === target) return head;
 
-  // evenly sample if too long
-  return Array.from({ length: target }, (_, k) => {
-    const idx = Math.round((k * (N - 1)) / (target - 1));
-    return frames[idx];
-  });
+  return head;
 }

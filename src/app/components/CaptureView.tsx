@@ -25,6 +25,27 @@ type FaceBox = {
   angle?: number;
 };
 
+function resizeFrameTo224(frame: ImageData): ImageData {
+  const src = document.createElement("canvas");
+  src.width = frame.width;
+  src.height = frame.height;
+  const sctx = src.getContext("2d", { willReadFrequently: true });
+  if (!sctx) return frame;
+  sctx.putImageData(frame, 0, 0);
+
+  const out = document.createElement("canvas");
+  out.width = 224;
+  out.height = 224;
+  const octx = out.getContext("2d", { willReadFrequently: true });
+  if (!octx) return frame;
+  // Preserve aspect ratio by center-cropping to square before resize.
+  const side = Math.min(frame.width, frame.height);
+  const sx = Math.floor((frame.width - side) / 2);
+  const sy = Math.floor((frame.height - side) / 2);
+  octx.drawImage(src, sx, sy, side, side, 0, 0, 224, 224);
+  return octx.getImageData(0, 0, 224, 224);
+}
+
 export function CaptureView() {
   const { registerCaptureControls, unregisterCaptureControls, updateCaptureState } =
     useCaptureControls();
@@ -43,6 +64,7 @@ export function CaptureView() {
 
   const cropBusyRef = useRef(false);
   const lastCropAtRef = useRef(0);
+  const hasPreviewRef = useRef(false);
 
   // Two <video> nodes mount depending on state
   const readyVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -60,14 +82,14 @@ export function CaptureView() {
   const maxChars = 50;
 
   const emotions: Emotion[] = [
-    "Neutral",
+    "Unknown",
     "Happy",
     "Sad",
-    "Surprise",
-    "Fear",
-    "Disgust",
+    "Neutral",
     "Angry",
-    "Contempt",
+    "Surprise",
+    "Disgust",
+    "Fear",
   ];
 
   // --- camera plumbing ---
@@ -212,9 +234,15 @@ function drawBoxOnOverlay(box: any) {
 
     ctx.drawImage(video, 0, 0, vw, vh);
     const imageData = ctx.getImageData(0, 0, vw, vh);
-    // Rolling buffer of last 16 frames
-    frameBufferRef.current.push(imageData);
-    if (frameBufferRef.current.length > 16) frameBufferRef.current.shift();
+    // Match training extraction: keep first 16 frames in order.
+    if (frameBufferRef.current.length < 16) {
+      frameBufferRef.current.push(imageData);
+    }
+
+    // Keep preview stable: only use fallback until first face crop is available.
+    if (!hasPreviewRef.current) {
+      drawCropPreview(resizeFrameTo224(imageData));
+    }
 
     // lightweight logging checkpoints
     const len = frameBufferRef.current.length;
@@ -232,6 +260,7 @@ function drawBoxOnOverlay(box: any) {
         const res = await cropFace224(imageData);
         if (res && res.box && res.image) {
           lastBoxRef.current = res.box;
+          hasPreviewRef.current = true;
           drawCropPreview(res.image);
           drawBoxOnOverlay(res.box);
           console.log("Detected face box:", res.box);
@@ -263,6 +292,7 @@ function drawBoxOnOverlay(box: any) {
     // clear any prior run
     frameBufferRef.current = [];
     lastBoxRef.current = null;
+    hasPreviewRef.current = false;
 
     setState("recording");
     setRecordingTime(0);
@@ -339,6 +369,7 @@ function drawBoxOnOverlay(box: any) {
     setCharCount(0);
     setLoadingMessage("");
     lastBoxRef.current = null;
+    hasPreviewRef.current = false;
 
     // clear overlay
     const c = overlayCanvasRef.current;
