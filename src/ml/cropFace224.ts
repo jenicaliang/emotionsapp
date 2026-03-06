@@ -33,6 +33,13 @@ function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(hi, v));
 }
 
+function centerCropSquareBounds(width: number, height: number) {
+  const side = Math.min(width, height);
+  const x = Math.floor((width - side) / 2);
+  const y = Math.floor((height - side) / 2);
+  return { x, y, w: side, h: side };
+}
+
 /**
  * Takes a 224×224 ImageData frame (from your capture canvas),
  * detects the face, and returns:
@@ -69,27 +76,28 @@ export async function cropFace224(
   const width = bb.width ?? 0;
   const height = bb.height ?? 0;
 
-  // Center of the detected face
-  const cx = originX + width / 2;
-  const cy = originY + height / 2;
-
-  // Square crop around face. Slightly larger than the detected face improves
-  // expression context (forehead/chin/cheeks) for emotion models.
-  const CROP_SCALE = 1.7;
-  // Small upward bias keeps more forehead in-frame and avoids chin-only tight crops.
-  const VERTICAL_BIAS = -0.06;
-  const size = Math.min(width, height) * CROP_SCALE;
-
-  let sx = Math.floor(cx - size / 2);
-  let sy = Math.floor(cy - size / 2 + size * VERTICAL_BIAS);
-  let sw = Math.floor(size);
-  let sh = Math.floor(size);
+  // Match predict.py crop_face(padding=0.3):
+  // face rectangle + 30% margin on each axis, then resize to 224x224.
+  const PADDING = 0.3;
+  const padX = Math.floor(width * PADDING);
+  const padY = Math.floor(height * PADDING);
+  let sx = Math.floor(originX - padX);
+  let sy = Math.floor(originY - padY);
+  let sw = Math.floor(width + 2 * padX);
+  let sh = Math.floor(height + 2 * padY);
 
   // Clamp crop to frame bounds
   sx = clamp(sx, 0, frameW - 1);
   sy = clamp(sy, 0, frameH - 1);
   sw = clamp(sw, 1, frameW - sx);
   sh = clamp(sh, 1, frameH - sy);
+  if (sw <= 1 || sh <= 1) {
+    const c = centerCropSquareBounds(frameW, frameH);
+    sx = c.x;
+    sy = c.y;
+    sw = c.w;
+    sh = c.h;
+  }
 
   // Draw full frame into tmp canvas
   const tmp = document.createElement("canvas");

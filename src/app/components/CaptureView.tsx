@@ -234,9 +234,11 @@ function drawBoxOnOverlay(box: any) {
 
     ctx.drawImage(video, 0, 0, vw, vh);
     const imageData = ctx.getImageData(0, 0, vw, vh);
-    // Match training extraction: keep first 16 frames in order.
-    if (frameBufferRef.current.length < 16) {
-      frameBufferRef.current.push(imageData);
+    // Keep a rolling window of captured frames; inference then uniformly samples 16.
+    const MAX_CAPTURE_FRAMES = 120;
+    frameBufferRef.current.push(imageData);
+    if (frameBufferRef.current.length > MAX_CAPTURE_FRAMES) {
+      frameBufferRef.current.shift();
     }
 
     // Keep preview stable: only use fallback until first face crop is available.

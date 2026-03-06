@@ -3,15 +3,19 @@ export function sampleFrames<T>(frames: T[], target = 16): T[] {
 
   if (N === 0) return [];
 
-  // Match training script:
-  // - take first `target` frames
-  // - if fewer than `target`, pad by repeating the last frame
-  const head = frames.slice(0, target);
-  if (head.length < target) {
-    const last = head[head.length - 1];
-    while (head.length < target) head.push(last);
+  // Match predict.py sample_indices:
+  // - if N <= target: use all frames, then pad by repeating last frame
+  // - if N > target: uniform center-of-bin sampling
+  if (N <= target) {
+    const out = [...frames];
+    const last = out[out.length - 1];
+    while (out.length < target) out.push(last);
+    return out;
   }
-  if (head.length === target) return head;
 
-  return head;
+  const step = N / target;
+  return Array.from({ length: target }, (_, i) => {
+    const idx = Math.floor(step * i + step / 2);
+    return frames[Math.min(Math.max(idx, 0), N - 1)];
+  });
 }
