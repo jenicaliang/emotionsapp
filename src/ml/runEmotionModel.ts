@@ -35,38 +35,16 @@ export type EmotionResult = {
 let model: tf.GraphModel | null = null;
 const MODEL_URL = "/web_model/model.json";
 
-type LabelMapMode =
-  | "identity"
-  | "swap_happy_sad"
-  | "swap_happy_surprise"
-  | "swap_happy_surprise_and_sad_angry";
-
 type PreprocessMode =
   | "raw_rgb255"
   | "zero_one_rgb"
   | "minus1_to_1_rgb"
   | "imagenet_bgr";
-const PREPROCESS_MODE: PreprocessMode = "raw_rgb255";
+// predict.py uses tf.keras.applications.resnet50.preprocess_input,
+// which matches ImageNet BGR mean subtraction.
+const PREPROCESS_MODE: PreprocessMode = "imagenet_bgr";
 const COMPARE_PREPROCESS_MODES = false;
 const EVAL_STORAGE_KEY = "emotion_eval_confusion_v1";
-
-const LABEL_MAPS: Record<LabelMapMode, number[]> = {
-  // mappedProbs[i] = rawProbs[LABEL_MAPS[mode][i]]
-  // where i follows labels[] order below.
-  identity: [0, 1, 2, 3, 4, 5, 6, 7],
-  swap_happy_sad: [0, 2, 1, 3, 4, 5, 6, 7],
-  swap_happy_surprise: [0, 3, 2, 1, 4, 5, 6, 7],
-  // Happy <- raw Surprise, Angry <- raw Sad, Sad <- raw Angry
-  swap_happy_surprise_and_sad_angry: [0, 3, 6, 1, 4, 5, 2, 7],
-};
-
-function getLabelMapMode(): LabelMapMode {
-  const fallback: LabelMapMode = "swap_happy_surprise";
-  if (typeof window === "undefined") return fallback;
-  const fromUrl = new URLSearchParams(window.location.search).get("labelMap");
-  if (fromUrl && fromUrl in LABEL_MAPS) return fromUrl as LabelMapMode;
-  return fallback;
-}
 
 export async function loadEmotionModel() {
   if (!model) {
@@ -126,11 +104,6 @@ function argmax(xs: number[]) {
     }
   }
   return bestIdx;
-}
-
-function remapProbabilities(rawProbs: number[], mode: LabelMapMode): number[] {
-  const map = LABEL_MAPS[mode];
-  return labels.map((_, labelIdx) => rawProbs[map[labelIdx]!] ?? 0);
 }
 
 function parseExpectedLabelFromUrl(): EmotionLabel | null {
@@ -242,7 +215,7 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
   let lastBox: FaceBox | null = null;
   let debugCrop: ImageData | null = null;
 
-  // 2) Match training script frame handling: first 16 frames + pad with last if short.
+  // 2) Match predict.py frame handling: uniform sampling to 16 (+ pad-last if short).
   const picked = sampleFrames(frames, 16);
   if (picked.length !== 16) {
     throw new Error(`Expected 16 frames after sampling, got ${picked.length}`);
@@ -324,7 +297,7 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
     console.log(`Probability stats - Mean: ${mean.toFixed(6)}, StdDev: ${stdDev.toFixed(6)}`);
     
     const finalProbs = probs;
-    console.log("Label mapping: disabled (identity/raw model output)");
+    console.log("Label mapping: none (direct model output)");
 
     const bestIdx = argmax(finalProbs);
     const bestScore = finalProbs[bestIdx] ?? 0;
