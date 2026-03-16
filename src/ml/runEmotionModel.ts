@@ -33,7 +33,8 @@ export type EmotionResult = {
 };
 
 let model: tf.GraphModel | null = null;
-const MODEL_URL = "/public/web_model/model.json";
+// Use BASE_URL so the model loads on GitHub Pages (e.g. /emotionsapp/web_model/model.json)
+const MODEL_URL = `${import.meta.env.BASE_URL}web_model/model.json`;
 
 type PreprocessMode =
   | "raw_rgb255"
