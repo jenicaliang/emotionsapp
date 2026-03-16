@@ -32,7 +32,7 @@ async function testModel() {
     console.log(`  Mean: ${mean.toFixed(6)} (1/8 = 0.125)`);
     console.log(`  StdDev: ${stdDev.toFixed(6)}`);
     
-    const emotions = ["Unknown", "Happy", "Sad", "Neutral", "Angry", "Surprise", "Disgust", "Fear"];
+    const emotions = ["Happy", "Sad", "Neutral", "Angry", "Surprise", "Disgust", "Fear"];
     const maxIdx = probs.indexOf(Math.max(...probs));
     const maxVal = probs[maxIdx];
     

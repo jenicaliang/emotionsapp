@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { currentUser, friends } from "../data/mockData";
+import { friends } from "../data/mockData";
+import { useCurrentUser } from "../context/CurrentUserContext";
 import { EmotionalBlob } from "./EmotionalBlob";
 import { Users, MapPin, Clock, LogOut, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import { Emotion } from "../types";
@@ -12,6 +13,7 @@ import Frame10 from "../../imports/Frame10";
 import Frame11 from "../../imports/Frame11";
 
 export function ProfileView() {
+  const { currentUser } = useCurrentUser();
   const [showInvite, setShowInvite] = useState(false);
   const [showEmotions, setShowEmotions] = useState(false);
 
@@ -69,14 +71,14 @@ export function ProfileView() {
         </div>
       </div>
 
-      {/* About Candid */}
+      {/* About Presents */}
       <div className="bg-card border border-border rounded-2xl p-5 mb-6">
         <h3 className="text-[16px] mb-4" style={{ color: "#5A5A5A" }}>
-          About Candid
+          About Presents
         </h3>
         
         <p className="text-[13px] leading-relaxed mb-3" style={{ color: "#A39B94" }}>
-          Candid uses machine learning to detect your emotions and share them with your closest friends. Because sometimes, you need an algorithm to tell you how you feel.
+          Presents uses machine learning to detect your emotions and share them with your closest friends. Because sometimes, you need an algorithm to tell you how you feel.
         </p>
         <p className="text-[12px] italic" style={{ color: "#8B7E74" }}>
           "We understand you better than you understand yourself."
@@ -84,7 +86,7 @@ export function ProfileView() {
       </div>
 
       {/* Emotion Guide - Expandable */}
-      <div className="bg-card border border-border rounded-2xl mb-6 overflow-hidden">
+      {/* <div className="bg-card border border-border rounded-2xl mb-6 overflow-hidden">
         <button
           onClick={() => setShowEmotions(!showEmotions)}
           className="w-full p-5 flex items-center justify-between hover:bg-secondary/30 transition-colors"
@@ -132,7 +134,7 @@ export function ProfileView() {
             </p>
           </div>
         )}
-      </div>
+      </div> */}
 
       {/* Your Emotional Circle - Separate Section */}
       <div className="mb-6">
@@ -176,7 +178,7 @@ export function ProfileView() {
           Privacy & Data Collection
         </h3>
         <p className="text-[11px] leading-relaxed" style={{ color: "#A39B94" }}>
-          We collect your video data, location, emotional patterns, and social connections to provide our service. Your data is processed by our machine learning algorithms and shared with your friends. By using Candid, you agree that authentic human connection requires surveillance.
+          We collect your video data, location, emotional patterns, and social connections to provide our service. Your data is processed by our machine learning algorithms and shared with your friends. By using Presents, you agree that authentic human connection requires surveillance.
         </p>
       </div>
 

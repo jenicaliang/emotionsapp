@@ -7,17 +7,17 @@ export function AnimatedLogo() {
       {/* Solid text "CANDID" - fades in and out */}
       <motion.p
         className="absolute font-['ABC_Connect_Unlicensed_Trial:Nail',sans-serif] leading-[42px] left-0 not-italic text-[#5a5a5a] text-[34px] top-[5.56px] tracking-[-1px] whitespace-nowrap"
-        animate={{
-          opacity: [1, 0, 0, 0, 1],
-        }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut",
-          times: [0, 0.25, 0.5, 0.75, 1],
-        }}
+        // animate={{
+        //   opacity: [1, 0, 0, 0, 1],
+        // }}
+        // transition={{
+        //   duration: 10,
+        //   repeat: Infinity,
+        //   ease: "easeInOut",
+        //   times: [0, 0.25, 0.5, 0.75, 1],
+        // }}
       >
-        CANDID
+        Presents
       </motion.p>
 
       {/* Background text "CANDID" for overlay state */}
@@ -26,18 +26,18 @@ export function AnimatedLogo() {
         animate={{
           opacity: [0, 0.14, 0.14, 0.14, 0],
         }}
-        transition={{
-          duration: 10,
-          repeat: Infinity,
-          ease: "easeInOut",
-          times: [0, 0.25, 0.5, 0.75, 1],
-        }}
+        // transition={{
+        //   duration: 10,
+        //   repeat: Infinity,
+        //   ease: "easeInOut",
+        //   times: [0, 0.25, 0.5, 0.75, 1],
+        // }}
       >
-        CANDID
+        Presents
       </motion.p>
 
       {/* Animated overlay image - fades in and out */}
-      <motion.div
+      {/* <motion.div
         className="absolute h-[47px] left-0 top-[0.56px] w-[113.471px]"
         animate={{
           opacity: [0, 1, 1, 1, 0],
@@ -56,7 +56,7 @@ export function AnimatedLogo() {
             src={imgUntitledDesign301}
           />
         </div>
-      </motion.div>
+      </motion.div> */}
     </div>
   );
 }

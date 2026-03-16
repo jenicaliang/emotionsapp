@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { Camera, RotateCcw, Check } from "lucide-react";
 import { Emotion } from "../types";
@@ -9,10 +10,11 @@ import {
 } from "../data/mockData";
 import { EmotionalBlob } from "./EmotionalBlob";
 import { useCaptureControls } from "./Layout";
+import { useCurrentUser } from "../context/CurrentUserContext";
 import { loadEmotionModel, runEmotionModel } from "../../ml/runEmotionModel";
 import { cropFace224 } from "../../ml/cropFace224";
 
-type CaptureState = "ready" | "recording" | "processing" | "result" | "cooldown";
+type CaptureState = "ready" | "loading-model" | "recording" | "processing" | "result" | "cooldown";
 
 type FaceBox = {
   originX: number;
@@ -47,8 +49,10 @@ function resizeFrameTo224(frame: ImageData): ImageData {
 }
 
 export function CaptureView() {
+  const navigate = useNavigate();
   const { registerCaptureControls, unregisterCaptureControls, updateCaptureState } =
     useCaptureControls();
+  const { setBroadcast } = useCurrentUser();
 
   const [state, setState] = useState<CaptureState>("ready");
   const [recordingTime, setRecordingTime] = useState(0);
@@ -81,8 +85,8 @@ export function CaptureView() {
 
   const maxChars = 50;
 
-  const emotions: Emotion[] = [
-    "Unknown",
+  // Model returns 7 labels (short form). UI/EmotionalBlob use these same strings.
+  const emotions = [
     "Happy",
     "Sad",
     "Neutral",
@@ -90,7 +94,7 @@ export function CaptureView() {
     "Surprise",
     "Disgust",
     "Fear",
-  ];
+  ] as const;
 
   // --- camera plumbing ---
 
@@ -143,12 +147,7 @@ export function CaptureView() {
     };
   }, []);
 
-  // Preload model once so mock app inference uses the saved weights.
-  useEffect(() => {
-    loadEmotionModel().catch((e) => {
-      console.error("Model preload failed:", e);
-    });
-  }, []);
+  // Model loads only when user taps record (keeps Feel tab fast; model is ~93MB).
 
   const getActiveVideoEl = useCallback(() => {
     return state === "recording" ? recordingVideoRef.current : readyVideoRef.current;
@@ -290,7 +289,17 @@ function drawBoxOnOverlay(box: any) {
     updateCaptureState("ready", 0);
   }, [updateCaptureState]);
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
+    // Load model on first record (avoids slow page load from ~93MB model)
+    setState("loading-model");
+    try {
+      await loadEmotionModel();
+    } catch (e) {
+      console.error("Model load failed:", e);
+      setState("ready");
+      return;
+    }
+
     // clear any prior run
     frameBufferRef.current = [];
     lastBoxRef.current = null;
@@ -357,9 +366,10 @@ function drawBoxOnOverlay(box: any) {
   };
 
   const submitStatus = () => {
-    if (status.trim().length > 0 && status.length <= maxChars) {
-      setState("cooldown");
+    if (detectedEmotion) {
+      setBroadcast(detectedEmotion, status.trim().slice(0, maxChars));
     }
+    setState("cooldown");
   };
 
   const reset = () => {
@@ -379,6 +389,11 @@ function drawBoxOnOverlay(box: any) {
     if (c && ctx) ctx.clearRect(0, 0, c.width, c.height);
   };
 
+  const goToHome = () => {
+    reset();
+    navigate("/");
+  };
+
   // Register controls on mount
   useEffect(() => {
     registerCaptureControls(startRecording, stopRecording);
@@ -392,6 +407,23 @@ function drawBoxOnOverlay(box: any) {
   return (
     <div className="h-full w-full flex flex-col items-center justify-center px-5 py-8">
       <AnimatePresence mode="wait">
+        {state === "loading-model" && (
+          <motion.div
+            key="loading-model"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="flex flex-col items-center justify-center text-center px-8"
+          >
+            <div className="w-16 h-16 rounded-full border-4 border-primary/30 border-t-primary animate-spin mb-6" />
+            <h3 className="text-[18px] mb-2" style={{ color: "#2D2D2D" }}>
+              Loading model...
+            </h3>
+            <p className="text-[13px] max-w-[260px]" style={{ color: "#6B6B6B" }}>
+              First time may take a moment (~90MB)
+            </p>
+          </motion.div>
+        )}
         {state === "ready" && (
           <motion.div
             key="ready"
@@ -581,8 +613,7 @@ function drawBoxOnOverlay(box: any) {
 
             <button
               onClick={submitStatus}
-              disabled={status.trim().length === 0}
-              className="w-full max-w-[300px] bg-primary text-primary-foreground rounded-full py-4 px-6 flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full max-w-[300px] bg-primary text-primary-foreground rounded-full py-4 px-6 flex items-center justify-center gap-2"
             >
               <Check size={20} />
               Broadcast Your State
@@ -626,7 +657,7 @@ function drawBoxOnOverlay(box: any) {
             </div>
 
             <button
-              onClick={reset}
+              onClick={goToHome}
               className="text-[13px] flex items-center gap-2 px-6 py-3 rounded-full bg-secondary"
               style={{ color: "#8B7E74" }}
             >

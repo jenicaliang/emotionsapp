@@ -1,5 +1,6 @@
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { useState, createContext, useContext } from "react";
+import { CurrentUserProvider } from "../context/CurrentUserContext";
 import { Toaster } from "./ui/sonner";
 import { AnimatedLogo } from "./AnimatedLogo";
 import { motion } from "motion/react";
@@ -83,11 +84,12 @@ export function Layout() {
 
   return (
     <CaptureContext.Provider value={contextValue}>
-      <div className="min-h-screen w-full bg-gradient-to-br from-gray-100 to-gray-200 flex items-center justify-center p-4">
+      <CurrentUserProvider>
+      <div className="min-h-screen w-full bg-background flex items-center justify-center">
         {/* Mobile Container */}
-        <div className="relative h-[812px] w-full max-w-[430px] bg-background flex flex-col overflow-hidden rounded-[40px] shadow-2xl border-8 border-gray-900">
+        <div className="relative h-screen w-full max-w-[430px] bg-background flex flex-col overflow-hidden">
           {/* Header */}
-          <header className="px-5 pt-5 pb-4 bg-background">
+          <header className="px-5 pt-5 pb-4 bg-background relative z-10">
             <AnimatedLogo />
             <p className="text-[13px] mt-0.5" style={{ color: "#A39B94" }}>
               What are you feeling today <span className="font-semibold">Christine</span>?
@@ -100,8 +102,8 @@ export function Layout() {
           </main>
 
           {/* Bottom Navigation */}
-          <nav className="bg-white relative border-t border-border">
-            <div className="relative h-20 flex items-center justify-around px-8">
+          <nav className="bg-white relative z-10 pb-5">
+            <div className="relative h-20 flex items-end justify-around px-8">
               {/* Map Button */}
               <button
                 onClick={() => navigate("/")}
@@ -114,7 +116,7 @@ export function Layout() {
                     <path d="M9 3.235V18.23" stroke={isMapActive ? "#5A5A5A" : "#D1C7BD"} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
                   </svg>
                 </div>
-                <span className="text-[10px] font-medium transition-colors" style={{ color: isMapActive ? "#5A5A5A" : "#D1C7BD" }}>
+                <span className="text-[12px] font-medium transition-colors" style={{ color: isMapActive ? "#5A5A5A" : "#D1C7BD" }}>
                   Map
                 </span>
               </button>
@@ -122,11 +124,11 @@ export function Layout() {
               {/* Feel Button - Elevated Center */}
               <button
                 onClick={handleFeelButtonClick}
-                className="flex flex-col items-center gap-1.5 -mt-8 transition-all hover:scale-105 active:scale-95"
+                className="flex flex-col items-center gap-1.5 transition-all hover:scale-105 active:scale-95"
                 disabled={isCaptureActive && captureState === "recording" && recordingTime < 5}
               >
                 <motion.div
-                  className="shadow-lg size-16 flex items-center justify-center border-4 border-white transition-shadow hover:shadow-xl"
+                  className="shadow-lg w-16 h-16 shrink-0 aspect-square flex items-center justify-center border-4 border-white transition-shadow hover:shadow-xl rounded-full"
                   animate={{
                     backgroundColor: isCaptureActive && captureState === "recording" && recordingTime < 5 ? "#D1C7BD" : isCaptureActive ? "#E74C3C" : "#f5efe7",
                     borderRadius: isCaptureActive && captureState === "recording" && recordingTime >= 5 ? "12px" : "50%",
@@ -154,7 +156,7 @@ export function Layout() {
                     />
                   )}
                 </motion.div>
-                <span className="text-[10px] font-medium transition-colors" style={{ color: isCaptureActive ? "#8B7E74" : "#A39B94" }}>
+                <span className="text-[12px] font-medium transition-colors" style={{ color: isCaptureActive ? "#8B7E74" : "#A39B94" }}>
                   Feel
                 </span>
               </button>
@@ -170,7 +172,7 @@ export function Layout() {
                     <path d={svgPaths.p180caa00} stroke={isProfileActive ? "#5A5A5A" : "#D1C7BD"} strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" />
                   </svg>
                 </div>
-                <span className="text-[10px] font-medium transition-colors" style={{ color: isProfileActive ? "#5A5A5A" : "#D1C7BD" }}>
+                <span className="text-[12px] font-medium transition-colors" style={{ color: isProfileActive ? "#5A5A5A" : "#D1C7BD" }}>
                   You
                 </span>
               </button>
@@ -181,6 +183,7 @@ export function Layout() {
           <Toaster />
         </div>
       </div>
+      </CurrentUserProvider>
     </CaptureContext.Provider>
   );
 }

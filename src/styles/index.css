@@ -33,3 +33,18 @@ body,
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(139, 126, 116, 0.5);
 }
+
+/* Sonner toast: align to top, darker text */
+[data-sonner-toast][data-styled='true'] {
+  align-items: flex-start;
+}
+[data-sonner-toast][data-styled='true'] [data-icon] {
+  align-items: flex-start;
+}
+[data-sonner-toast][data-styled='true'] [data-content] {
+  align-items: flex-start;
+}
+[data-sonner-toast][data-styled='true'] [data-title],
+[data-sonner-toast][data-styled='true'] [data-description] {
+  color: #2D2D2D;
+}

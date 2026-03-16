@@ -13,12 +13,26 @@ export default defineConfig(({ command }) => ({
     tailwindcss(),
   ],
   resolve: {
+    dedupe: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
     alias: {
-      // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
     },
   },
 
   // File types to support raw imports. Never add .css, .tsx, or .ts files to this.
   assetsInclude: ['**/*.svg', '**/*.csv'],
+
+  // Don't watch the TF.js model dir (large .bin files) — avoids slow startup and HMR
+  server: {
+    port: 5173,
+    strictPort: false,
+    watch: {
+      ignored: ['**/public/web_model/**'],
+    },
+  },
+
+  // Pre-bundle these so the first dev run doesn't hang for minutes
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router', 'motion', '@tensorflow/tfjs', '@mediapipe/tasks-vision'],
+  },
 }))

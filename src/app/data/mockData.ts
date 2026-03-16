@@ -65,28 +65,25 @@ export const carePackages: CarePackage[] = [
   },
 ];
 
-export const emotionColors: Record<Emotion, string> = {
-  Unknown: "#D9D9D9", // Fallback gray when model is uncertain
-  Happy: "#FFD580", // Warmer, deeper peach/gold
-  Sad: "#8CB8FF", // Deeper sky blue
-  Neutral: "#D4C4B4", // Deeper warm beige
-  Angry: "#FFB8B8", // Stronger coral pink
-  Surprise: "#FFBE80", // Deeper apricot orange
-  Disgust: "#8CFFC4", // Brighter mint green
-  Fear: "#C89FFF", // Richer lavender purple
-  Contempt: "#B8B8FF", // Soft violet
+// 7 classes matching model output (no Unknown). Keys used by UI from model labels.
+export const emotionColors: Record<string, string> = {
+  Happy: "#FFD580",
+  Sad: "#8CB8FF",
+  Neutral: "#D4C4B4",
+  Angry: "#FFB8B8",
+  Surprise: "#FFBE80",
+  Disgust: "#8CFFC4",
+  Fear: "#C89FFF",
 };
 
-export const emotionFaces: Record<Emotion, string> = {
-  Unknown: "•_•",
+export const emotionFaces: Record<string, string> = {
   Happy: "◡‿◡",
   Sad: "︵﹏︵",
   Neutral: "•_•",
   Angry: "ಠ_ಠ",
-  Surprise: "◉_◉", // Custom SVG face used in EmotionalBlob component
+  Surprise: "◉_◉",
   Disgust: "ಠ~ಠ",
   Fear: "⊙﹏⊙",
-  Contempt: "~_~",
 };
 
 export const loadingMessages = [

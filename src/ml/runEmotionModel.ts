@@ -3,8 +3,8 @@ import * as tf from "@tensorflow/tfjs";
 import { cropFace224 } from "./cropFace224";
 import { sampleFrames } from "./utils";
 
+// 7 classes to match saved_model (3.15) output shape (-1, 7). Order must match training.
 const labels = [
-  "Unknown",
   "Happy",
   "Sad",
   "Neutral",
@@ -342,7 +342,7 @@ export async function runEmotionModel(frames: ImageData[]): Promise<EmotionResul
       );
     }
 
-    const label = labels[bestIdx] ?? "Unknown";
+    const label = labels[bestIdx] ?? "Neutral";
     const expected = parseExpectedLabelFromUrl();
     if (expected) {
       updateAndLogConfusion(expected, label);

@@ -1,35 +1,191 @@
-import { useState } from "react";
-import { friends, currentUser, carePackages } from "../data/mockData";
+import { useState, useEffect, useRef } from "react";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import "leaflet/dist/leaflet.css";
+import "../../styles/leaflet.css";
+import { friends, currentUser as defaultCurrentUser, carePackages } from "../data/mockData";
+import { useCurrentUser } from "../context/CurrentUserContext";
 import { EmotionalBlob } from "./EmotionalBlob";
 import { Friend } from "../types";
 import { motion, AnimatePresence } from "motion/react";
-import { X, Gift, Clock } from "lucide-react";
+import { X, Gift, Clock, MapPin } from "lucide-react";
 import { CarePackageModal } from "./CarePackageModal";
 
+const DEFAULT_CENTER: [number, number] = [defaultCurrentUser.location.lat, defaultCurrentUser.location.lng];
+const DEFAULT_ZOOM = 15;
+
+const FRIEND_RADIUS_MILES = 2;
+
+/** Returns random [dLat, dLng] offsets within radiusMiles of center (uniform in disk). New positions each load. */
+function generateRandomOffsetsInRadius(
+  center: { lat: number; lng: number },
+  count: number,
+  radiusMiles: number
+): [number, number][] {
+  const degPerMileLat = 1 / 69;
+  const degPerMileLng = 1 / (69 * Math.cos((center.lat * Math.PI) / 180));
+  const out: [number, number][] = [];
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * 2 * Math.PI;
+    const r = radiusMiles * Math.sqrt(Math.random());
+    out.push([
+      r * Math.cos(angle) * degPerMileLat,
+      r * Math.sin(angle) * degPerMileLng,
+    ]);
+  }
+  return out;
+}
+
+/** Overlay that renders EmotionalBlob (real faces) at lat/lng; positions update every frame during pan/zoom for fluid movement */
+function MapBlobOverlay({
+  people,
+  onSelect,
+}: {
+  people: (Friend & { id: string })[];
+  onSelect: (f: Friend) => void;
+}) {
+  const map = useMap();
+  const [positions, setPositions] = useState<Record<string, { x: number; y: number }>>({});
+  const rafRef = useRef<number | null>(null);
+  const peopleRef = useRef(people);
+  peopleRef.current = people;
+
+  useEffect(() => {
+    const update = () => {
+      const list = peopleRef.current;
+      const next: Record<string, { x: number; y: number }> = {};
+      list.forEach((p) => {
+        const pt = map.latLngToContainerPoint([p.location.lat, p.location.lng]);
+        next[p.id] = { x: pt.x, y: pt.y };
+      });
+      setPositions(next);
+    };
+
+    const startFluidUpdate = () => {
+      const tick = () => {
+        update();
+        rafRef.current = requestAnimationFrame(tick);
+      };
+      rafRef.current = requestAnimationFrame(tick);
+    };
+
+    const stopFluidUpdate = () => {
+      if (rafRef.current != null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
+      update();
+    };
+
+    update();
+    map.on("movestart", startFluidUpdate);
+    map.on("zoomstart", startFluidUpdate);
+    map.on("moveend", stopFluidUpdate);
+    map.on("zoomend", stopFluidUpdate);
+    map.on("viewreset", update);
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+      map.off("movestart", startFluidUpdate);
+      map.off("zoomstart", startFluidUpdate);
+      map.off("moveend", stopFluidUpdate);
+      map.off("zoomend", stopFluidUpdate);
+      map.off("viewreset", update);
+    };
+  }, [map]);
+
+  return (
+    <div className="absolute inset-0 pointer-events-none z-[1000]" aria-hidden>
+      {people.map((p) => {
+        const pos = positions[p.id];
+        if (pos == null) return null;
+        const isUser = p.id === defaultCurrentUser.id;
+        const size = isUser ? 70 : 56;
+        const half = size / 2;
+        const labelH = 24;
+        return (
+          <button
+            key={p.id}
+            type="button"
+            className="absolute flex flex-col items-center gap-1.5 pointer-events-auto transition-transform active:scale-95"
+            style={{
+              left: pos.x - half,
+              top: pos.y - half - labelH,
+            }}
+            onClick={() => onSelect(p)}
+          >
+            <EmotionalBlob emotion={p.emotion} size={size} />
+            <div className="bg-card px-2.5 py-0.5 rounded-full shadow-sm">
+              <p className="text-[10px]" style={{ color: "#A39B94" }}>
+                {p.name}
+              </p>
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** When user location is available, center the map on it */
+function MapCenterToUser({ userLocation }: { userLocation: { lat: number; lng: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (userLocation) {
+      map.flyTo([userLocation.lat, userLocation.lng], map.getZoom(), { duration: 0.8 });
+    }
+  }, [map, userLocation?.lat, userLocation?.lng]);
+  return null;
+}
+
 export function MapView() {
+  const { currentUser } = useCurrentUser();
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [showCarePackage, setShowCarePackage] = useState(false);
   const [packageToOpen, setPackageToOpen] = useState<string | null>(null);
-  const [scale, setScale] = useState(1);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationStatus, setLocationStatus] = useState<"idle" | "loading" | "granted" | "denied" | "unavailable">("idle");
 
-  // Calculate positions for friends on the map (pseudo-map layout)
-  const getFriendPosition = (index: number, total: number) => {
-    // Spread friends across a larger map area for dragging
-    const positions = [
-      { x: 15, y: 20 },
-      { x: 75, y: 15 },
-      { x: 45, y: 35 },
-      { x: 85, y: 45 },
-      { x: 25, y: 60 },
-      { x: 65, y: 70 },
-      { x: 90, y: 80 },
-      { x: 30, y: 85 },
-      { x: 10, y: 40 },
-      { x: 55, y: 50 },
-    ];
-    
-    return positions[index % positions.length];
-  };
+  // Ask for user's location on mount
+  useEffect(() => {
+    if (!navigator.geolocation) {
+      setLocationStatus("unavailable");
+      return;
+    }
+    setLocationStatus("loading");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationStatus("granted");
+      },
+      () => {
+        setLocationStatus("denied");
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  }, []);
+
+  const mapCenter: [number, number] = userLocation
+    ? [userLocation.lat, userLocation.lng]
+    : [currentUser.location.lat, currentUser.location.lng];
+  const userForMap: Friend & { id: string } = userLocation
+    ? { ...currentUser, location: userLocation }
+    : currentUser;
+
+  // Random offsets within 2-mile radius, generated once per load so positions differ each visit
+  const [friendOffsets] = useState<[number, number][]>(() =>
+    generateRandomOffsetsInRadius(defaultCurrentUser.location, friends.length, FRIEND_RADIUS_MILES)
+  );
+
+  const userCenter = userForMap.location;
+  const friendsNearUser: (Friend & { id: string })[] = friends.map((friend, i) => {
+    const [dLat, dLng] = friendOffsets[i] ?? [0, 0];
+    return {
+      ...friend,
+      location: {
+        lat: userCenter.lat + dLat,
+        lng: userCenter.lng + dLng,
+      },
+    };
+  });
 
   const unopenedPackages = carePackages.filter((pkg) => !pkg.opened);
   
@@ -60,7 +216,7 @@ export function MapView() {
         <motion.div
           initial={{ y: -20, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          className="absolute top-5 left-5 right-5 z-20"
+          className="absolute top-2 left-5 right-5 z-20"
         >
           <button
             onClick={() => setPackageToOpen(unopenedPackages[0].id)}
@@ -85,145 +241,67 @@ export function MapView() {
         </motion.div>
       )}
 
-      {/* Map container */}
-      <div className="absolute top-[114px] left-5 right-5 h-[456px]">
-        <div className="relative w-full h-full rounded-2xl overflow-hidden" style={{ backgroundColor: "#F2EDE4" }}>
-          {/* Zoom controls */}
-          <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-            <button
-              onClick={() => setScale(Math.min(scale + 0.2, 2))}
-              className="w-10 h-10 bg-card rounded-full shadow-lg border border-border flex items-center justify-center"
-              style={{ color: "#8B7E74" }}
-            >
-              <span className="text-[20px] leading-none">+</span>
-            </button>
-            <button
-              onClick={() => setScale(Math.max(scale - 0.2, 0.5))}
-              className="w-10 h-10 bg-card rounded-full shadow-lg border border-border flex items-center justify-center"
-              style={{ color: "#8B7E74" }}
-            >
-              <span className="text-[20px] leading-none">−</span>
-            </button>
-          </div>
-
-          {/* Draggable map content */}
-          <motion.div
-            drag
-            dragConstraints={{
-              top: -200,
-              left: -200,
-              right: 200,
-              bottom: 200,
-            }}
-            dragElastic={0.05}
-            dragTransition={{ bounceStiffness: 600, bounceDamping: 30 }}
-            animate={{ scale }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
-            className="absolute w-[800px] h-[800px] cursor-grab active:cursor-grabbing"
-            style={{
-              left: "50%",
-              top: "50%",
-              marginLeft: "-400px",
-              marginTop: "-400px",
-              originX: 0.5,
-              originY: 0.5,
-            }}
-          >
-            {/* Simplified street map background */}
-            <svg className="absolute inset-0 w-full h-full" viewBox="0 0 800 800">
-              {/* Water/Park areas */}
-              <ellipse cx="650" cy="180" rx="140" ry="100" fill="#D4E6E1" opacity="0.4" />
-              <rect x="50" y="600" width="160" height="140" rx="16" fill="#E8F5E3" opacity="0.5" />
-              <ellipse cx="200" cy="250" rx="100" ry="80" fill="#D4E6E1" opacity="0.3" />
-              <rect x="550" y="550" width="180" height="180" rx="16" fill="#E8F5E3" opacity="0.4" />
-              
-              {/* Major streets */}
-              <line x1="0" y1="280" x2="800" y2="280" stroke="#C8BFB0" strokeWidth="12" opacity="0.6" />
-              <line x1="0" y1="520" x2="800" y2="520" stroke="#C8BFB0" strokeWidth="12" opacity="0.6" />
-              <line x1="240" y1="0" x2="240" y2="800" stroke="#C8BFB0" strokeWidth="12" opacity="0.6" />
-              <line x1="560" y1="0" x2="560" y2="800" stroke="#C8BFB0" strokeWidth="12" opacity="0.6" />
-              
-              {/* Minor streets - horizontal */}
-              <line x1="0" y1="140" x2="800" y2="140" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="0" y1="400" x2="800" y2="400" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="0" y1="640" x2="800" y2="640" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="0" y1="100" x2="800" y2="100" stroke="#D9D2C5" strokeWidth="5" opacity="0.4" />
-              <line x1="0" y1="700" x2="800" y2="700" stroke="#D9D2C5" strokeWidth="5" opacity="0.4" />
-              
-              {/* Minor streets - vertical */}
-              <line x1="120" y1="0" x2="120" y2="800" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="400" y1="0" x2="400" y2="800" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="680" y1="0" x2="680" y2="800" stroke="#D9D2C5" strokeWidth="6" opacity="0.5" />
-              <line x1="80" y1="0" x2="80" y2="800" stroke="#D9D2C5" strokeWidth="5" opacity="0.4" />
-              <line x1="720" y1="0" x2="720" y2="800" stroke="#D9D2C5" strokeWidth="5" opacity="0.4" />
-              
-              {/* Curved/diagonal streets for realism */}
-              <path d="M 0 180 Q 280 220, 560 180 T 800 220" stroke="#D9D2C5" strokeWidth="6" fill="none" opacity="0.4" />
-              <path d="M 350 0 Q 370 280, 420 560 T 460 800" stroke="#D9D2C5" strokeWidth="6" fill="none" opacity="0.4" />
-              <path d="M 0 450 Q 200 480, 400 450 T 800 480" stroke="#D9D2C5" strokeWidth="5" fill="none" opacity="0.35" />
-              
-              {/* Building blocks (subtle rectangles) */}
-              <rect x="260" y="300" width="280" height="200" fill="#E8DFD4" opacity="0.3" rx="8" />
-              <rect x="260" y="20" width="280" height="240" fill="#E8DFD4" opacity="0.3" rx="8" />
-              <rect x="580" y="300" width="180" height="200" fill="#E8DFD4" opacity="0.3" rx="8" />
-              <rect x="20" y="300" width="200" height="200" fill="#E8DFD4" opacity="0.3" rx="8" />
-              <rect x="20" y="20" width="200" height="240" fill="#E8DFD4" opacity="0.25" rx="8" />
-              <rect x="260" y="540" width="120" height="140" fill="#E8DFD4" opacity="0.3" rx="8" />
-              <rect x="420" y="540" width="120" height="140" fill="#E8DFD4" opacity="0.3" rx="8" />
-            </svg>
-
-            {/* Current user in center */}
-            <div
-              className="absolute z-10 pointer-events-none"
-              style={{
-                left: "50%",
-                top: "50%",
-                transform: "translate(-50%, -50%)",
-              }}
-            >
-              <div className="flex flex-col items-center gap-2">
-                <EmotionalBlob emotion={currentUser.emotion} size={70} />
-                <div className="bg-card px-3 py-1 rounded-full shadow-sm">
-                  <p className="text-[11px]" style={{ color: "#8B7E74" }}>
-                    {currentUser.name}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Friends */}
-            {friends.map((friend, index) => {
-              const pos = getFriendPosition(index, friends.length);
-              return (
-                <button
-                  key={friend.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedFriend(friend);
-                  }}
-                  className="absolute z-10 pointer-events-auto"
-                  style={{
-                    left: `${pos.x}%`,
-                    top: `${pos.y}%`,
-                    transform: "translate(-50%, -50%)",
-                  }}
-                >
-                  <div className="flex flex-col items-center gap-1.5">
-                    <EmotionalBlob emotion={friend.emotion} size={56} />
-                    <div className="bg-card px-2.5 py-0.5 rounded-full shadow-sm">
-                      <p className="text-[10px]" style={{ color: "#A39B94" }}>
-                        {friend.name}
-                      </p>
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </motion.div>
+      {/* Location status — only show when loading or when we fell back to default */}
+      {locationStatus === "loading" && (
+        <div className="absolute top-[56px] left-5 right-5 z-10 flex justify-center">
+          <p className="text-[12px] px-3 py-1.5 rounded-full bg-card/95 shadow border border-border" style={{ color: "#6B6B6B" }}>
+            Getting your location…
+          </p>
         </div>
+      )}
+      {locationStatus === "denied" && (
+        <div className="absolute top-[52px] left-5 right-5 z-10 flex justify-center">
+          <p className="text-[11px] px-3 py-1.5 rounded-full bg-card/95 shadow border border-border" style={{ color: "#8B7E74" }}>
+            Location unavailable — showing default area
+          </p>
+        </div>
+      )}
+      {locationStatus === "unavailable" && (
+        <div className="absolute top-[52px] left-5 right-5 z-10 flex justify-center">
+          <p className="text-[11px] px-3 py-1.5 rounded-full bg-card/95 shadow border border-border" style={{ color: "#8B7E74" }}>
+            Geolocation not supported — showing default area
+          </p>
+        </div>
+      )}
+
+      {/* Map container — OpenStreetMap via Leaflet */}
+      <div className="absolute top-[98px] left-5 right-5 bottom-6">
+        <div className="relative w-full h-full rounded-2xl overflow-hidden">
+          <MapContainer
+            center={mapCenter}
+            zoom={DEFAULT_ZOOM}
+            className="h-full w-full rounded-2xl"
+            style={{ minHeight: 280 }}
+            scrollWheelZoom
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <MapCenterToUser userLocation={userLocation} />
+            {/* Emotional blob faces (real avatars) overlaid at lat/lng; move with map on pan/zoom */}
+            <MapBlobOverlay
+              people={[userForMap, ...friendsNearUser]}
+              onSelect={setSelectedFriend}
+            />
+          </MapContainer>
+        </div>
+        {/* Hint tooltip: floats up 0.5s after homepage shows */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.4, ease: "easeOut" }}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[1100] flex items-center gap-2 rounded-xl bg-white px-4 py-3 shadow-lg border border-border"
+          style={{ color: "#5A5A5A" }}
+        >
+          <MapPin size={18} className="shrink-0" style={{ color: "#6B6B6B" }} />
+          <span className="text-[13px] font-medium whitespace-nowrap">
+            Click on a friend to send them some care.
+          </span>
+        </motion.div>
       </div>
 
-      {/* Friend detail modal */}
+      {/* Friend detail popup — top level above map and everything */}
       <AnimatePresence>
         {selectedFriend && (
           <>
@@ -232,14 +310,14 @@ export function MapView() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setSelectedFriend(null)}
-              className="absolute inset-0 bg-black/20 z-30"
+              className="fixed inset-0 bg-black/20 z-[9998]"
             />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="absolute bottom-0 left-0 right-0 z-40 bg-card rounded-t-2xl p-6 shadow-2xl"
+              className="fixed bottom-0 left-0 right-0 z-[9999] bg-card rounded-t-2xl p-6 shadow-2xl max-w-[430px] mx-auto"
             >
               <button
                 onClick={() => setSelectedFriend(null)}

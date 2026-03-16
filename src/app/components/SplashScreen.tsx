@@ -46,7 +46,7 @@ export function SplashScreen({ onComplete }: SplashScreenProps) {
           className="text-[48px] tracking-tight mb-2"
           style={{ color: "#8B7E74" }}
         >
-          Gestur
+          Presents
         </h1>
       </motion.div>
 

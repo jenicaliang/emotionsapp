@@ -23,8 +23,12 @@ except Exception:
 
 from train import Config, build_model
 
+# 7 classes to match model output shape (-1, 7).
+# Order must match the order used when training the model; if you always get the same
+# label (e.g. "Sad"), check: (1) raw output below — same index winning? (2) training
+# script class order — reorder CLASS_NAMES to match.
 CLASS_NAMES = [
-    "Unknown", "Happy", "Sad", "Neutral",
+    "Happy", "Sad", "Neutral",
     "Angry", "Surprise", "Disgust", "Fear",
 ]
 
@@ -168,12 +172,20 @@ def build_clip(faces: list) -> np.ndarray:
 
 
 def print_results(probs: np.ndarray):
-    ranked = sorted(zip(CLASS_NAMES, probs), key=lambda x: -x[1])
+    n = min(len(CLASS_NAMES), len(probs))
+    names = CLASS_NAMES[:n]
+    values = np.asarray(probs[:n], dtype=np.float64)
+    # If values look like logits (not in [0,1]), softmax them for display
+    if values.size > 0 and (values.max() > 1.0 or values.min() < 0.0):
+        exp = np.exp(values - values.max())
+        values = exp / exp.sum()
+    ranked = sorted(zip(names, values), key=lambda x: -x[1])
     print()
     for name, p in ranked:
         bar = "#" * int(p * 40)
         print(f"  {name:10s} {p:6.2%}  {bar}")
-    print(f"\n  Prediction: {CLASS_NAMES[int(np.argmax(probs))]}")
+    best_idx = int(np.argmax(probs[:n]))
+    print(f"\n  Prediction: {CLASS_NAMES[best_idx]}")
 
 
 def main():
@@ -231,6 +243,20 @@ def main():
         clip = build_clip(faces)
 
     probs = model(clip, training=False).numpy()[0]
+    # Ensure model output length matches our labels (e.g. 7-class model)
+    if len(probs) != len(CLASS_NAMES):
+        print(
+            f"WARNING: model output length {len(probs)} != CLASS_NAMES length {len(CLASS_NAMES)}. "
+            "Check that CLASS_NAMES order matches the order used during training."
+        )
+        # Slice or pad so we don't index out of range
+        probs = np.asarray(probs, dtype=np.float32)
+        if len(probs) > len(CLASS_NAMES):
+            probs = probs[: len(CLASS_NAMES)]
+        else:
+            probs = np.pad(probs, (0, len(CLASS_NAMES) - len(probs)), constant_values=0.0)
+    # Debug: print raw scores so you can see if one class always dominates ("always Sad" etc.)
+    print("Raw output (index -> score):", dict(zip(range(len(CLASS_NAMES)), [round(float(p), 4) for p in probs])))
     print_results(probs)
 
 
