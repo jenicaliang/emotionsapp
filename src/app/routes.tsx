@@ -27,4 +27,6 @@ export const router = createBrowserRouter([
       { path: "profile", Component: () => <Suspense fallback={<PageLoader />}><ProfileView /></Suspense> },
     ],
   },
-]);
+], {
+  basename: "/emotionsapp",
+});
