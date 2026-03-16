@@ -33,7 +33,7 @@ export type EmotionResult = {
 };
 
 let model: tf.GraphModel | null = null;
-const MODEL_URL = "/web_model/model.json";
+const MODEL_URL = `${import.meta.env.BASE_URL}web_model/model.json`;
 
 type PreprocessMode =
   | "raw_rgb255"
