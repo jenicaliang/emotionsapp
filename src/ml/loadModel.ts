@@ -6,7 +6,7 @@ export async function loadModel() {
   if (!model) {
     // optional: choose backend. (webgl is default on most browsers)
     await tf.ready();
-    model = await tf.loadGraphModel("/model/model.json");
+    model = await tf.loadGraphModel(`${import.meta.env.BASE_URL}model/model.json`);
   }
   return model;
 }
